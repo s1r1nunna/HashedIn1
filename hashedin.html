@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Image Smoothing App</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    canvas { border: 1px solid #ccc; margin-right: 10px; }
+    #container { display: flex; flex-direction: row; align-items: flex-start; margin-top: 10px; }
+    #controls { margin-bottom: 10px; }
+    #pixelValue { margin-top: 10px; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h2>Image Smoothing App</h2>
+  <div id="controls">
+    <input type="file" id="fileInput" accept="image/*">
+    <label><input type="checkbox" id="grayscaleToggle"> Grayscale First</label>
+    <label>Kernel Size:
+      <select id="kernelSize">
+        <option value="3">3x3</option>
+        <option value="5">5x5</option>
+        <option value="7">7x7</option>
+      </select>
+    </label>
+    <button id="smoothBtn">Smooth Image</button>
+  </div>
+
+  <div id="container">
+    <div>
+      <p>Original Image</p>
+      <canvas id="originalCanvas"></canvas>
+    </div>
+    <div>
+      <p>Smoothed Image</p>
+      <canvas id="smoothCanvas"></canvas>
+    </div>
+  </div>
+
+  <div id="pixelValue"></div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const originalCanvas = document.getElementById('originalCanvas');
+    const smoothCanvas = document.getElementById('smoothCanvas');
+    const originalCtx = originalCanvas.getContext('2d');
+    const smoothCtx = smoothCanvas.getContext('2d');
+    const smoothBtn = document.getElementById('smoothBtn');
+    const grayscaleToggle = document.getElementById('grayscaleToggle');
+    const kernelSelector = document.getElementById('kernelSize');
+    const pixelValue = document.getElementById('pixelValue');
+
+    let imageData, width, height;
+
+    fileInput.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const img = new Image();
+      img.onload = () => {
+        width = img.width;
+        height = img.height;
+        originalCanvas.width = smoothCanvas.width = width;
+        originalCanvas.height = smoothCanvas.height = height;
+        originalCtx.drawImage(img, 0, 0);
+        imageData = originalCtx.getImageData(0, 0, width, height);
+        smoothCtx.clearRect(0, 0, width, height);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    smoothBtn.addEventListener('click', () => {
+      if (!imageData) return;
+      const kernelSize = parseInt(kernelSelector.value);
+      const gray = grayscaleToggle.checked;
+      let src = new Uint8ClampedArray(imageData.data);
+      if (gray) {
+        for (let i = 0; i < src.length; i += 4) {
+          let avg = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
+          src[i] = src[i+1] = src[i+2] = avg;
+        }
+      }
+      const result = new Uint8ClampedArray(src.length);
+      const offset = Math.floor(kernelSize / 2);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          let r = 0, g = 0, b = 0, a = 0, count = 0;
+          for (let dy = -offset; dy <= offset; dy++) {
+            for (let dx = -offset; dx <= offset; dx++) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                const i = (ny * width + nx) * 4;
+                r += src[i];
+                g += src[i+1];
+                b += src[i+2];
+                a += src[i+3];
+                count++;
+              }
+            }
+          }
+          const idx = (y * width + x) * 4;
+          result[idx] = r / count;
+          result[idx+1] = g / count;
+          result[idx+2] = b / count;
+          result[idx+3] = a / count;
+        }
+      }
+      smoothCtx.putImageData(new ImageData(result, width, height), 0, 0);
+    });
+
+    originalCanvas.addEventListener('mousemove', e => {
+      const rect = originalCanvas.getBoundingClientRect();
+      const x = Math.floor(e.clientX - rect.left);
+      const y = Math.floor(e.clientY - rect.top);
+      if (x >= 0 && y >= 0 && x < width && y < height) {
+        const idx = (y * width + x) * 4;
+        const data = imageData.data;
+        pixelValue.textContent = `Pixel (${x}, ${y}): R=${data[idx]} G=${data[idx+1]} B=${data[idx+2]} A=${data[idx+3]}`;
+      }
+    });
+  </script>
+</body>
+</html>
